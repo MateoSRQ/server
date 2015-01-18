@@ -52,14 +52,111 @@ class DataController extends Controller
     
 
     public function actionLocation() {
-        
-        
-        
-        
         $query = new Query;
         $query->select(null)->from('data');
         
-        $axis = null;        
+
+        
+        if (isset($_GET['by'])) {
+            switch (strtolower($_GET['by'])) {
+                case 'departamento':
+                    $query->select('data.iddpto, data.nombdep, ST_AsGEOJSON("geom") as geometry, SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+                    $query->addGroupBy(['data.iddpto', 'data.nombdep', 'geom']);
+                    $query->join('INNER JOIN','departamentos','data.iddpto = departamentos.first_iddp');                    
+                    break;
+                case 'provincia':
+                    $query->select('data.idprov, data.nombprov, ST_AsGEOJSON("geom") as geometry,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+                    $query->addGroupBy(['data.idprov',  'data.nombprov', 'geom']);
+                    $query->join('INNER JOIN','provincias','data.idprov = provincias.first_idpr');
+                    break;
+                default:
+                    $query->select('data.iddist, data.nombdist, ST_AsGEOJSON("geom") as geometry,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+                    $query->addGroupBy(['data.iddist', 'data.nombdist', 'geom']);
+                    $query->join('INNER JOIN','distritos','data.iddist = distritos.iddist');
+                    break;
+            }
+        }
+        else {
+            $query->select('data.iddist, data.nombdist, ST_AsGEOJSON("geom") as geometry,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+            $query->addGroupBy(['data.iddist', 'data.nombdist', 'geom']);
+            $query->join('INNER JOIN','distritos','data.iddist = distritos.iddist');            
+        }
+        
+        if (isset($_GET['dpto'])) {
+            $value = explode(',', $_GET['dpto']);
+            $finalvalue = [];
+            foreach($value as $v) {
+                $finalvalue[] = $v;
+            }
+            $query->andWhere(['data.iddpto' => $finalvalue]); 
+        }
+        if (isset($_GET['prov'])) {
+            $value = explode(',', $_GET['prov']);
+            $finalvalue = [];
+            foreach($value as $v) {
+                $finalvalue[] = $v;
+            }
+            $query->andWhere(['data.idprov' => $finalvalue]); 
+        }
+        if (isset($_GET['dist'])) {
+            $value = explode(',', $_GET['dist']);
+            $finalvalue = [];
+            foreach($value as $v) {
+                $finalvalue[] = $v;
+            }
+            $query->andWhere(['data.iddist' => $finalvalue]); 
+        }
+        if (isset($_GET['pia'])) {
+            $value = explode(',', $_GET['pia']);
+            foreach($value as $v) {
+                $query->andHaving('SUM("PIA") ' . $v); 
+            }
+        }
+
+        $data = $query->all();
+        $result = [];
+        foreach ($data as $datum) {
+            $r['properties']['type']   = 'Feature';
+            $r['properties']['pia' ]   = $datum['PIA'];
+            $r['properties']['pim']    = $datum['PIM'];
+            
+            if (isset($_GET['by'])) {
+                switch (strtolower($_GET['by'])) {
+                    case 'departamento':
+                        $r['properties']['id_dpto']         = $datum['iddpto'];
+                        $r['properties']['nombre_dpto']     = $datum['nombdep'];
+                        break;
+                    case 'provincia':
+                        $r['properties']['id_prov']         = $datum['idprov'];
+                        $r['properties']['nombre_prov']     = $datum['nombprov'];
+                        break;
+                    default:
+                        $r['properties']['id_dist']         = $datum['iddist'];
+                        $r['properties']['nombre_dist']     = $datum['nombdist'];                    
+                        break;
+                }
+            }
+            else {
+                $r['properties']['id_dist']         = $datum['iddist'];
+                $r['properties']['nombre_dist']     = $datum['nombdist'];                    
+                break;   
+            }
+            $r['geometry'] = json_decode($datum['geometry']);
+            $result[] = $r;
+        }
+        
+        $items = [
+            'type'      =>  'FeatureCollection',       
+            'crs'       =>  ['type' => 'name', 'properties' => [ 'name' => 'urn:ogc:def:crs:EPSG::3857']],
+            'features'  =>  $result
+        ];
+        
+        $items = json_encode($items);
+        //Yii::$app->response->format = 'json';
+        $items = (\yii\helpers\Json::encode($items, JSON_UNESCAPED_SLASHES ));
+        return $this->renderPartial('index', ['items' => $items]);
+        
+        /*
         
         foreach($_GET as $key => $value) {
             if ($key == 'by') {
@@ -72,7 +169,7 @@ class DataController extends Controller
                         break;
                     case 'PROVINCIA':
                         $query->select('data.idprov, data.nombprov, ST_AsGEOJSON("geom") as geometry,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
-                        $query->addGroupBy(['data.idprov', 'data.nombprov', 'geom']);
+                        $query->addGroupBy(['data.idprov',  'data.nombprov', 'geom']);
                         $query->join('INNER JOIN','provincias','data.idprov = provincias.first_idpr');
                         $axis = 'PROVINCIA';
                         break;
@@ -90,35 +187,52 @@ class DataController extends Controller
                     foreach($val as $v) {
                         $finalvalue[] = $v;
                     }
-                $query->andWhere([$key => $finalvalue]);    
+                    
+                switch ($key) {
+                    case 'dpto':
+                        $k = 'data.iddpto';
+                    break;
+                    case 'prov':
+                        $k = 'data.idprov';
+                    break;
+                    case 'dist':
+                        $k = 'data.iddist';
+                    break;
+                }
+                $query->andWhere([$k => $finalvalue]);    
             }
         }
         
-
-
+        $query->andHaving('SUM("PIA") > 300000000');
+                    
 
         $data = $query->all();
         $result = [];
         foreach ($data as $datum) {
             $r['properties']['type']   = 'Feature';
-
             $r['properties']['pia' ]   = $datum['PIA'];
             $r['properties']['pim']    = $datum['PIM'];
             switch ($axis) {
                 case 'DEPARTAMENTO':
-                    $r['properties']['id']     = $datum['iddpto'];
-                    $r['properties']['nombre'] = $datum['nombdep'];
+                    $r['properties']['id_dpto']         = $datum['iddpto'];
+                    $r['properties']['nombre_dpto']     = $datum['nombdep'];
                     break;
                 case 'PROVINCIA':
-                    $r['properties']['id']     = $datum['idprov'];
-                    $r['properties']['nombre'] = $datum['nombprov'];
+                    $r['properties']['id_prov']         = $datum['idprov'];
+                    //$r['properties']['id_dpto']         = $datum['iddpto'];
+                    //$r['properties']['nombre_dpto']     = $datum['nombdep'];
+                    $r['properties']['nombre_prov']     = $datum['nombprov'];
                     break;
                 default:
-                    $r['properties']['id']     = $datum['iddist'];
-                    $r['properties']['nombre'] = $datum['nombdist'];                    
+                    $r['properties']['id_dist']         = $datum['iddist'];
+                    //$r['properties']['id_prov']         = $datum['idprov'];
+                    //$r['properties']['id_dpto']         = $datum['iddpto'];
+                    //$r['properties']['nombre_dpto']     = $datum['nombdep'];
+                    //$r['properties']['nombre_prov']     = $datum['nombprov'];
+                    $r['properties']['nombre_dist']     = $datum['nombdist'];                    
                     break;
             }
-            $r['geometry']              = json_decode($datum['geometry']);
+            $r['geometry'] = json_decode($datum['geometry']);
             $result[] = $r;
         }
         
@@ -137,6 +251,7 @@ class DataController extends Controller
         $items = (\yii\helpers\Json::encode($items, JSON_UNESCAPED_SLASHES ));
         //return $items;
         return $this->renderPartial('index', ['items' => $items]);
+        */
     }
     
     public function actionIndex()
