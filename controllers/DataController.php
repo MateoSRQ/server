@@ -9,62 +9,78 @@ use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
 use yii\db\Query;
+use yii\filters\PageCache;
+use yii\caching\DbDependency;
 /**
  * DataController implements the CRUD actions for Data model.
  */
+
+
+ 
+ 
 class DataController extends Controller
 {
+    public $layout = 'json';
+    
+
     public function behaviors()
     {
         return [
-            'verbs' => [
-                'class' => VerbFilter::className(),
-                'actions' => [
-                    'delete' => ['post'],
-                ],
+            /*
+            'pageCache' => [
+                'class' => 'yii\filters\PageCache',
+                //'only' => ['location'],
+                'duration' => 60,
+
+                'variations' => [
+                    \Yii::$app->language,
+                    $_GET
+                ]
+            ],
+            */
+            [
+                'class' => 'yii\filters\HttpCache',
+                //'only' => ['location'],
+                'etagSeed' => function ($action, $params) {
+                    return serialize(date('Y-m-d:H'));
+                },
+
             ],
         ];
     }
 
-    /**
-     * Lists all Data models.
-     * @return mixed
-     */
     
-    
+
     public function actionLocation() {
         
         
+        
+        
         $query = new Query;
-        /*
-        if (isset($_GET['id']) && $_GET['id']) {
-            switch ($_GET['id']) {
-                case 'DEPARTAMENTO':
-                        var_dump($_GET);
-                        die;
-                    $query->select('gid, iddpto, nombdep, SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
-                    break;
-                default:
-                    $query->select('iddpto, SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
-                    break;
-            }
-        }
-        */
         $query->select(null)->from('data');
+        
+        $axis = null;        
         
         foreach($_GET as $key => $value) {
             if ($key == 'by') {
                 switch ($value) {
                     case 'DEPARTAMENTO':
-                        $query->select('iddpto, nombdep,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
-                        $query->addGroupBy(['iddpto', 'nombdep']);
+                        $query->select('data.iddpto, data.nombdep, ST_AsGEOJSON("geom") as geometry, SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+                        $query->addGroupBy(['data.iddpto', 'data.nombdep', 'geom']);
+                        $query->join('INNER JOIN','departamentos','data.iddpto = departamentos.first_iddp');
+                        $axis = 'DEPARTAMENTO';
                         break;
                     case 'PROVINCIA':
-                        $query->select('idprov, nombprov,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
-                        $query->addGroupBy(['idprov', 'nombprov']);
+                        $query->select('data.idprov, data.nombprov, ST_AsGEOJSON("geom") as geometry,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+                        $query->addGroupBy(['data.idprov', 'data.nombprov', 'geom']);
+                        $query->join('INNER JOIN','provincias','data.idprov = provincias.first_idpr');
+                        $axis = 'PROVINCIA';
                         break;
                     default:
-                        $query->select(null)->from('data');
+                        $query->select('data.iddist, data.nombdist, ST_AsGEOJSON("geom") as geometry,  SUM("PIA") as "PIA", SUM("PIM") as "PIM"')->from('data');
+                        $query->addGroupBy(['data.iddist', 'data.nombdist', 'geom']);
+                        $query->join('INNER JOIN','distritos','data.iddist = distritos.iddist');
+                        $axis = 'DISTRITO';
                         break;
                 } 
             }
@@ -77,33 +93,50 @@ class DataController extends Controller
                 $query->andWhere([$key => $finalvalue]);    
             }
         }
+        
+
 
 
         $data = $query->all();
-        $items = ['values' => $data];
-        \Yii::$app->response->format = 'json';
-        return $items;
-        
-        return $this->render('index', [
-            'items' => $items,
-            'sort' => $sort,
-            'pages' => $pages,
-        ]); 
+        $result = [];
+        foreach ($data as $datum) {
+            $r['properties']['type']   = 'Feature';
 
-        // a location parameter is selected
-        
-        /*
-        if (isset($_GET['id']) && $_GET['id']) {
-            switch ($_GET['id']) {
-                case ''
+            $r['properties']['pia' ]   = $datum['PIA'];
+            $r['properties']['pim']    = $datum['PIM'];
+            switch ($axis) {
+                case 'DEPARTAMENTO':
+                    $r['properties']['id']     = $datum['iddpto'];
+                    $r['properties']['nombre'] = $datum['nombdep'];
+                    break;
+                case 'PROVINCIA':
+                    $r['properties']['id']     = $datum['idprov'];
+                    $r['properties']['nombre'] = $datum['nombprov'];
+                    break;
+                default:
+                    $r['properties']['id']     = $datum['iddist'];
+                    $r['properties']['nombre'] = $datum['nombdist'];                    
+                    break;
             }
-            
-            
+            $r['geometry']              = json_decode($datum['geometry']);
+            $result[] = $r;
         }
-        else {
-
-        }
-        /*
+        
+        $items = [
+            'type'      =>  'FeatureCollection',       
+            'crs'       =>  ['type' => 'name', 'properties' => [ 'name' => 'urn:ogc:def:crs:EPSG::3857']],
+            'features'  =>  $result
+        ];
+        
+        $items = json_encode($items);
+        //echo $items;
+        
+        
+        //return $items;
+        //Yii::$app->response->format = 'json';
+        $items = (\yii\helpers\Json::encode($items, JSON_UNESCAPED_SLASHES ));
+        //return $items;
+        return $this->renderPartial('index', ['items' => $items]);
     }
     
     public function actionIndex()
