@@ -37,7 +37,7 @@ class Provincias extends \yii\db\ActiveRecord
     {
         return [
             [['count', 'min_shape_', 'ha'], 'number'],
-            [['geom'], 'string'],
+            [['geojson'], 'string'],
             [['first_idpr'], 'string', 'max' => 4],
             [['nombprov'], 'string', 'max' => 40],
             [['first_nomb'], 'string', 'max' => 25],
@@ -55,6 +55,7 @@ class Provincias extends \yii\db\ActiveRecord
             'gid' => 'Gid',
             'count' => 'Count',
             'first_idpr' => 'First Idpr',
+            'first_iddp' => 'First Iddp',
             'nombprov' => 'Nombprov',
             'first_nomb' => 'First Nomb',
             'last_dcto' => 'Last Dcto',
@@ -63,7 +64,7 @@ class Provincias extends \yii\db\ActiveRecord
             'last_fecha' => 'Last Fecha',
             'min_shape_' => 'Min Shape',
             'ha' => 'Ha',
-            'geom' => 'Geom',
+            'geojson' => 'Geojson',
         ];
     }
 }

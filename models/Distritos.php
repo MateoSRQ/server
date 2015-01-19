@@ -60,7 +60,7 @@ class Distritos extends \yii\db\ActiveRecord
             'nombprov' => 'Nombprov',
             'nombdep' => 'Nombdep',
             'nom_cap' => 'Nom Cap',
-            'geom' => 'Geom',
+            'geojson' => 'Geojson',
         ];
     }
 }

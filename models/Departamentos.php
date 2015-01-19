@@ -31,7 +31,7 @@ class Departamentos extends \yii\db\ActiveRecord
     {
         return [
             [['count', 'hectares'], 'number'],
-            [['geom'], 'string'],
+            [['geojson'], 'string'],
             [['nombdep'], 'string', 'max' => 25],
             [['first_iddp'], 'string', 'max' => 10]
         ];
@@ -48,7 +48,7 @@ class Departamentos extends \yii\db\ActiveRecord
             'count' => 'Count',
             'first_iddp' => 'First Iddp',
             'hectares' => 'Hectares',
-            'geom' => 'Geom',
+            'geojson' => 'Geojson',
         ];
     }
 
