@@ -48,6 +48,30 @@ class DataController extends Controller
             ],
         ];
     }
+    
+    public function actionList() {
+        $query = new Query;
+        $query->select('first_iddp as id, nombdep as nombre')->from('departamentos');
+        $departamentos = $query->all();
+        foreach($departamentos as $departamento) {
+            echo '<optgroup rel="' . $departamento['id'] . '" label="' . $departamento['nombre'] .  '"></optgroup>';
+            $query->select('first_idpr as id, nombprov as nombre')->from('provincias');
+            $query->where("first_iddp = '" . $departamento['id'] . "'");
+            $provincias = $query->all();
+            foreach($provincias as $provincia) {
+                echo '<optgroup rel="' . $provincia['id'] . '" label="' . $provincia['nombre'] . '"></optgroup>';
+                $query->select('iddist as id, nombdist as nombre')->from('distritos');
+                $query->where("idprov = '". $provincia['id'] . "'");
+                $distritos = $query->all();
+                foreach ($distritos as $distrito) {
+                    echo '<option value="' . $provincia['id'] . '">' . $distrito['nombre'] .  '</option>';
+                }
+            }
+        }
+        
+        die;
+    }
+    
 
     public function actionKey() {
         $query = new Query;
